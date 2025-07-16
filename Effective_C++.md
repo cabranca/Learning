@@ -38,4 +38,9 @@ Si lo que estoy usando es una clase custom para implementar RAII, debo optar por
 
 ## Item 15: Proveer aceso a recursos _raw_ en clases de gestión de recursos
 
+La idea es que usualmente APIs externas requieren que les pasemos los recursos crudos, por lo que deberíamos poder exponerlos de alguna manera en nuestra clase de gestión de recursos. A priori tenemos dos maneras distintas y elegimos una u otra dependiendo del contexto.
 
+- **Conversión explícita**: como el `get()` de los smart pointers, más difícil de equivocarse pero más trabajoso para el usuario.
+- **Conversión implícita**: un operador como `()` o `*` puede ser más intuitivo pero más confuso y propenso a errores ya que no está claro el tipo de la variable.
+
+# Item 16: Ser consecuente en los usos de _new_ y _delete_ para un mismo recurso
