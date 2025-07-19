@@ -43,4 +43,26 @@ La idea es que usualmente APIs externas requieren que les pasemos los recursos c
 - **Conversión explícita**: como el `get()` de los smart pointers, más difícil de equivocarse pero más trabajoso para el usuario.
 - **Conversión implícita**: un operador como `()` o `*` puede ser más intuitivo pero más confuso y propenso a errores ya que no está claro el tipo de la variable.
 
-# Item 16: Ser consecuente en los usos de _new_ y _delete_ para un mismo recurso
+## Item 16: Ser consecuente en los usos de _new_ y _delete_ para un mismo recurso
+
+La idea es tener cuidado al momento de llamar a _delete_ en caso de que el objeto a destruir haya sido creardo como array. Como la declaración de un puntero puede tomar como valor la direcicón del array, es posible tener un leak de memoria si al momento de liberar la memoria hacemos `delete` en vez de `delete []`.
+
+## Item 17: Almacenar objetos en Smart Pointers en una sola línea aparte
+
+Hay un error muy sutil que puede surgir a la hora de crear un smart pointer y es a la hora de llamar en una misma línea a la alocación de memoria, la construcción del smart pointer y capaz un llamado a otra función.
+
+Por ejemplo una función que toma 2 parámetros, un smart pointer y un float. Si construyo el smart pointer en el argumento y el float es el resultado de un llamado a otra función, esta otra función puede tirar una excepción y el compilador **no me garantiza** que los argumentos se ejecuten en el orden en que los escribo, por lo que la memoria alocada podría no llegar a almacenarse en el smart pointer y por ende podría no liberarse.
+
+# Diseños y Declaraciones
+
+## Item 18: Hacer interfaces fáciles de usar correctamente y difíciles de usar incorrectamente
+
+Por un lado debemos asumir que el usuario va a intentar utilizar nuestra interfaz de la manera correcta, por lo que de haber un fallo el error resdiría en la interfaz.
+
+Por otro lado, si el código no hace lo que el usuario espera,no debería compilar directamente. Y si compila, debería hacer exactamente lo que el usuario espera.
+
+Una primera estrategia es hacer uso de nuevos **tipos de variables** definidas por nosotros (idealmente clases pero structs valen también). Al definirlos, nosotros decidimos qué instancias son válidas y qué instancias no lo son.
+
+Estos tipos de variables deberían tener las mismas reglas que los _built-in types_ en cuanto a operadores, modificadores const, etc. También deberían ser consistentes con otras interfaces como las de STL (ej: que el tamaño de un container se consiga con `size()`).
+
+Muy clave poder reducir la responsabilidad del usuario de manejar memoria. Entran en juego los muy útiles smart pointers.
