@@ -66,3 +66,37 @@ Una primera estrategia es hacer uso de nuevos **tipos de variables** definidas p
 Estos tipos de variables deberían tener las mismas reglas que los _built-in types_ en cuanto a operadores, modificadores const, etc. También deberían ser consistentes con otras interfaces como las de STL (ej: que el tamaño de un container se consiga con `size()`).
 
 Muy clave poder reducir la responsabilidad del usuario de manejar memoria. Entran en juego los muy útiles smart pointers.
+
+## Item 19: Pensar el diseño de una clase como el diseño de un tipo
+
+Este punto es difícil en cuanto requiere tiempo de reflexión y aconstumbramiento a un análisis exhaustivo de las clases definidas por el usuario. Algunas preguntas pertinentes son:
+
+- Cómo deberían crearse y destruirse los objetos de nuestro nuevo tipo?
+- Cómo debería diferir la inicialización de nuestro objeto de su asignación?
+- Qué significa para los objetos de tu nuevo tipo que sean pasados por valor?
+- Cuáles son las restricciones para instancias válidas de tu nuevo tipo?
+- Encaja tu nuevo tupo en un grafo de herencia?
+- Qué tipo de conversiones están permitidas para tu nuevo tipo?
+
+**Conversiones implícitas vs explícitas**
+
+Cuando tengo operadores de conversión o constructores de un parámetro, el compilador puede utilizarlos siempre que yo haga un llamado a una función que toma como parámetro una clase A y esta clase A puede ser construida con este tipo B. Esto puede arreglarse con el modificador `explicit` que obliga a construir primero A a partir de B y luego sí pasarlo por parámetro a la función. Evidentemente con constructores de 0 parámetros o más de 2 parámetros esto no es un problema.
+
+- Qué operadores y funciones tienen sentido para el nuevo tipo?
+- Qué funciones estándar (generadas por el compilador) deberían deshabilitarse?
+- Quién debería tener acceso a los miembros de tu nuevo tipo?
+- Qué garantías brinda este nuevo tipo con respecto a performance, manejo de excepciones, manejo de memoria?
+- Qué tan general es tu nuevo tipo? Estás definiendo uno o un template de tipos?
+- Es un nuevo tipo realmente lo que necesitás? Podrías reemplazarlo por agregar funcionalidad a un tipo existente?
+
+## Item 20: Preferir pasaje por referencia a constante antes que pasaje por valor
+
+Este punto es bastante directo. El pasaje por valor implica una copia por lo que al pasar por valor objetos grandes es difícil medir el costo de esta copia. El único caso general en que se recomienda pasar por valor es para los _built-in types_ y algunos tipos relacionados a la STL, ya que están fuertemente optimizados (no confundir con que la razón sea el tamaño).
+
+Por otra parte, un problema que puede surgir de pasar por valor tiene que ver con el pasaje de una clase a un parámetro que tiene como tipo una clase base. Al construirse un objeto en el mismo llamado de la función, ocurre un _slice_ del objeto y perdemos información del objeto orignal (específicamente lo relacionado a la clase hija).
+
+Como último comentario, no termino de entender el razonamiento en el siguiente fragmento:
+
+_Si miramos lo que realiza el compilador, veremos que que la const reference es en realidad un puntero. **Como resultado**, es más eficiente para los built-in types pasar por valor que pasar por referencia._
+
+**Resuelto**: las dos razones son que un puntero serían 8 bytes mientras que el int típicamente es de 4 bytes. Además, al pasar un puntero existe una mínima indirección contra tener directamente el valor.
