@@ -100,3 +100,113 @@ Como último comentario, no termino de entender el razonamiento en el siguiente 
 _Si miramos lo que realiza el compilador, veremos que que la const reference es en realidad un puntero. **Como resultado**, es más eficiente para los built-in types pasar por valor que pasar por referencia._
 
 **Resuelto**: las dos razones son que un puntero serían 8 bytes mientras que el int típicamente es de 4 bytes. Además, al pasar un puntero existe una mínima indirección contra tener directamente el valor.
+
+## Item 21:
+
+Evitar a toda costa los siguientes retornos en funciones:
+
+- Puntero o referencia a un objeto local en el stack.
+- Referencia a un objeto alocado en el heap.
+- Puntero o referencia a un objeto estático local (excepto que sepa que realmetne necesito uno solo).
+
+**Comentario**: y puntero a un objeto del heap? Entiendo que como poder, ser puede. Pero creo recordar que el libro diga algo de que es un mal diseño si le dejo al usuario la responsabilidad de liberar la memoria.
+
+## Item 22: Declarar _private_ a los data members
+
+- Declarar a los data members privados. Acceso uniforme, control de acceso atomizado, refuerza invariantes y da flexibilidad en la implementación.
+- Recordar que **_protected_ no es más encapsulado que _public_**.
+
+**Chequear el campo Handled de la clase Event de Cabrankengine**
+
+## Item 23: Preferir funciones _no-friend no-miembro_ a funciones _miembro_
+
+Vamos con algunos casos concrectos donde esta preferencia se manifiesta:
+
+- Operadores simétricos (multiplicación, suma, igualdad).
+- Funciones que involucran dos tipos o más y no hay un owner claro, una predominancia de alguno de estos tipos.
+- Algoritmos auxiliares que solo interactúan con la interfaz pública de la clase.
+- Testing o funcionalidad extendida de la clase.
+
+## Item 24: Declarar _no-miembro_ funciones donde se debería aplicar conversión de tipo a todos sus parámetros
+
+Recordar que lo opuesto de una función miembro es una función _no-miembro_, no una función _friend_.
+
+Lo que dice el título. Si tu función neestia conversiones de tipo en todos los parámetros (incluyendo el _this_), la función debe ser _no-miembro_.
+
+## Item 25: Considerar soporte para un _non-throwing_ swap
+
+Básicamente el swap es una manera de sortear asignaciones por copia para intercambiar variables. Antes de C++11 era bastante necsario ya que no estaba optimizado más allá de los _built-in types_.
+
+Ahora no pareciera ser tan necesario crear custom swaps para las clases definidas por el usuario. De todos modos, si mi clase Entity tuviese miembros costosos de copiar o manejase objetos dinámicos podría implementar un swap que ahorre copias por un lado y asegure un _no-throw_ por el otro.
+
+# Implementaciones
+
+## Item 26: Posponer la definición de una variable todo lo que se pueda
+
+No hay mucho que comentar. Evidentemente no hay ninguna razón para no hacerlo y sí hay varias para sí hacerlo. Principalmente el hecho de que puede haber leaks de memoria si declaro uyna variable y antes de inicializarla ocurre una excepción.
+
+## Item 27: Minimizar el uso de castings
+
+- Evitar el uso de casteos, especialmente de `dynamic_cast` porque puede ser muy poco performante. En general, si se realiza un casteo habría que investigar una alternativa _cast-free_.
+- Si vas a castear, mejor hacerlo dentro de una función y no exponerlo al cliente.
+- Bajo ningún concepto utilizar _C-Style_ casts. No solo por lo vetusto sino porque **no sabemos** que tipo de cast se está aplicando en este caso.
+
+Hagamos un repaso de los casts disponibles y su uso más común:
+
+|Tipo|Cuándo|Concepto|Uso principal|
+|-|-|-|-|
+|`static_cast`|Compilación|Conversión definida|Conversiones numéricas|
+|`reinterpret_cast`|Compilación|Conversión no definida|Interpretación de buffers|
+|`const_cast`|Compilación|Remueve el modificador `const`|Conexión con APIs que sé que no modifican. Reutilización de código cuando tengo verisón const y no const|
+|`dynamic_cast`|Ejecución|Downcasting|Castear de una clase base a una clase derivada|
+
+## Item 28: Evitar devolver _handles_ a objetos internos
+
+La idea es tratar de no devolver nunca referencias ni punteros a miembros de una clase. Por un lado (y evidentemente), evitar devolver estos no const porque podrían modificar el estado de mi objeto desde fuera rompiendo invariantes. Por otro lado y más sutilmente, si devuelvo alguna de estas aunque sea constante y mi objeto se destruye, el _handle_ que devolví queda inválido.
+
+Si bien es verdad que en principio devolvería una copia, por un lado es posible que se realize un `std::move` que ahorre esto o incluso que el compilador realice un **RVO (return value optimization)** que consiste en construir el objeto directamente en la variable de retorno (seguría habiendo una construcción contra un move).
+
+## Item 29: Siempre buscar un código _exception-safe_
+
+La idea general de este punto es que las funciones que arrojen excepciones no deberían dejar al objeto que las contiene en un estado inválido. Tengo 3 alternativas de garrantía que puedo ofrecer en una API:
+
+- **No-throw**: nunca lanza excepciones, la operación siempre es exitosa.
+- **Strong guarantee**: si la operación falla, el estado del programa no cambió y es como si nada hubiera pasado.
+- **Basic guarantee**: si la operación falla, se garantiza que el programa quede en un estado válido pero indeterminado.
+
+**Tenes especial cuidado con alocación de memoria y construcción de objetos**
+
+## Item 30: Entender a fondo el _Inlining_
+
+- A veces puede generar un .obj más pequeño pero **no siempre**.
+- Todas las funciones definidas en un header (incluidos los templates) o dentro de una clase son inline.
+- Ninguna función virual puede ser inline.
+
+## Item 31: Minimizar las dependencias de compilación entre archivos
+
+Por un lado, hay una optimización posible en el desacople que produce declarar punteros a objetos en vez de tener los objetos en sí. Por otro lado, se habla de dos maneras de desacoplar la declaración de la implementación al momento de incluir:
+
+- Patrón **Pimpl** (Pointer to implementation) con _Handle classes_.
+- Clases interfaz en polimorfismo.
+
+**Averiguar más sobre pros y contras de tener punteros en vez de los objetos en sí. Con punteros crudos entiendo que es mejor a costa de manejar la memoria. Con smart pointers capaz eso mejora pero el unique_ptr tiene su overhead no solo de implementación sino de tener que definir el delter pero capaz es más sencillo de lo que creo".**
+
+# Herencia y Diseño Orientado a Objetos
+
+## Item 32: Asegurarse que una herencia pública modela un "is-a"
+
+Básicamente no hay que olvidar jamás al modelo de que una herencia pública indica que una clase derivada **es todo lo que es su clase base**.
+
+## Item 33: Evitar esconder nombres heredados
+
+- Esconder nombres **solo es posible en herencia pública** 
+- Los nombres se esconden incluso aunque haya overload con distintos parámetros!!
+- Se puede aplicar `Using::método` para no esconder los nombres heredados.
+
+## Item 34: Diferenciar entre heredar una interfaz y heredar una implementación
+
+- Bajo herencia pública, las clases derivadas **siempre** heredan interfaz, específicamente métodos virtuales puros.
+- Los métodos virtuales impuros agregan una herencia de implementación por defecto.
+- Los métodos no virtuales marcan una herencia de interfaz más una herencia obligatoria de implementación.
+
+## Item 35: Considerar alternativas a funciones virtuales
