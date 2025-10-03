@@ -210,3 +210,58 @@ Básicamente no hay que olvidar jamás al modelo de que una herencia pública in
 - Los métodos no virtuales marcan una herencia de interfaz más una herencia obligatoria de implementación.
 
 ## Item 35: Considerar alternativas a funciones virtuales
+
+Es importante recordar que existen ciertas alternativas:
+
+- **Non-virtual interface idiom (NVI idiom)**: wrappea una función virtual con una no virtual más accesible.
+- **Function Pointer data members**: cambio el comportamiento en runtime pasándole al objeto la función que debe llamar para el estado actual.
+- **Strategy Pattern**: la idea es cambiar funciones virtuales en una jerarquía por funciones virtuales en otra.
+
+Desde ya que la desventaja de considerar la alternativa de FPointers es que no tendríamos acceso a los miembros no públicos de la clase.
+
+Creo que los puntos 2 y 3 hablan medio de lo mismo en C++ moderno: el uso de cualquier _callable_.
+
+## Item 36: Nunca redefinir una función no virtual heredada
+
+Se escondería la implementación original y el objeto derivado rompería la relación **is_a**.
+
+## Item 37: Nunca redefinir el valor default de un parámetro en una función heredada
+
+Esto sería un error porque los parámetros default están vinculados estáticamente mientras que las funciones virtuales lo están dinámicamente.
+
+## Item 38: La composición debe modelar _has-a_ o _is-implemented-in-terms-of_
+
+- Separar bien la idea de composición y de herencia pública.
+- En el dominio de aplicación (diseño), la composición significa _has-a_. En el dominio de implementación, significa _is-implemented-in-terms-of_.
+
+## Item 39: Usar herencia privada con juicio
+
+- A diferencia de la herencia pública, esta significa _is-implemented-in-terms-of_. La idea es que podría se útil si quiero esconder la herencia y necesito acceder a algunos miembros protegidos en la clase base (o redefinir funciones virtuales).
+- A diferencia de la composición, puedo permitir la **empty base optimization** (especialmente útil para desarrolladores de librerías que buscan minimizar tamaños de objetos).
+
+## Item 40: Usar herencia múltiple de manera juiciosa
+
+- Es más compleja que la simple y puede dar lugar a ambigüedades y a herencia virtual.
+- Esto es costoso pero se puede amortizar si la clase base no tiene data.
+- Un uso común es para combinar herencia pública de una clase interfaz con una herencia privada de una clase que solo me interesa la implementación.
+
+# Templates y Programación Genérica
+
+## Item 41: Entender interfaces implícitas y polimorfismo en tiempo de compilación
+
+- Tanto clases como templates soportan interfaces y polimorfismo.
+- Para las clases, **las interfaces son explícitas y se centran en signaturas de funciones**. El polimorfismo ocurre en tiempo de ejecución mediante funciones virtuales.
+- Para parámetros templates, **las interfaces son implícitas y se basan en expresiones válidas**. El polimorfismo ocurre en tiempo de compilación mediante instanciación de templates y overloading de funciones.
+
+## Item 42: Entender los dos significados de `typename`
+
+- Cuando declaramos parámetros template, `class` y `typename` son intercambiables.
+- Para identificar nombre de tipos anidados deebe utilizarse `typename`, excepto en un identificador de clase base en una _initialization list_.
+
+## Item 43: Saber cómo acceder a nombres en clases base templatizadas
+
+En clases template derivadas, referirse a nombres de la clase base template usando el prefijo `this->`, utilizando la declaración con `using` o con una califiación de la clase base explícita.
+
+## Item 44: Factorizar código independiente de parámetros fuera de los templates
+
+
