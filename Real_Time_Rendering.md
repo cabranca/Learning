@@ -9,11 +9,11 @@ There are 3 big stages in the graphics pipeline, each one divided in many smalle
 - Rasterization
 - Pixel Processing
 
-## Application Stage
+## 2.2 Application Stage
 
 The Application stage is the CPU work. It can do previous calculations like collision detection or input handling. It prepares the geometry data for the GPU.
 
-## Geometry Processing Stage
+## 2.3 Geometry Processing Stage
 
 The Geometry Processing stageis divided into the following stages
 
@@ -22,11 +22,11 @@ The Geometry Processing stageis divided into the following stages
 - Clipping
 - Screen Mapping
 
-### Vertex Shading and Projection
+### 2.3.1 Vertex Shading and Projection
 
 The vertex shading historically used to compute color con vertex. Now the name stayed but in reality it performs transformations on the vertex positions given a model, a view and a projection. Moreover, the Vertex Shader can output arbitrary data for the Pixel Shader to get as input and use in its computing (Normals, Tangents, Texture Coordinates). 
 
-### Optional Vertex processing
+### 2.3.2 Optional Vertex processing
 
 Depending on the HW, the output of the Vertex Shading could be processed by one or more of the following operations:
 
@@ -42,7 +42,7 @@ Older that tesellation, it's more common across GPUs. It consist in a simpler ve
 
 This is a more general step, the vertex output is taken as an array that can be processed by both CPU or GPU, tipically used for particle simulations.
 
-### Clipping
+### 2.3.3 Clipping
 
 Before passing the data to the Rasterization stage, we must be sure to only render what's visible, i.e. what's partially or totally inside the *view volume*. That's why it's so important to transform the vertex coordinates into the homogeneous space, so everything it's compared to the unit cube limits.
 
@@ -50,7 +50,7 @@ If a primitive is totally inside the unit cube, it's rasterized as it is. If it'
 
 The user may also define extra clipping spaces. this is called **sectioning**. Finally the clipped vertices are transformed with a **perspective division** so they fit a *normalized device coordinates*.
 
-### Screen Mapping
+### 2.3.4 Screen Mapping
 
 After clipping, the vertex coordinates are transformed to **screen coordinates**. If *x* and *y* joined with the *z*-coordinate, they make the **window coordinates**.
 
@@ -59,7 +59,7 @@ The mapping is done by a translation and a scale. The *x* and *y* coordinates fi
 As a side comment, the screen coordinate are floating point values even though we have an integer number for the amount of pixels per row and column. This means that the center of the pixel is calculated as its index plus 0.5.
 
 
-## Rasterization
+## 2.4 Rasterization
 
 Also known as *scan conversion*, rasterization is the process of finding all the pixels within a primitive. It's the conversion from window coordinates (screen + z) to pixels on the screen. The rasterization has two steps: **triangle setup/primitive assembly** and **triangle traversal**.
 
@@ -69,21 +69,21 @@ The interesting part of rasterization is that one must define what it means for 
 - Supersampling/Multisampling antialiasing: same base idea but with more samples per pixel.
 - Conservative rasterization: a pixel is inside the primitive if some part (no matter how much) of the pixel overlaps.
 
-### Triangle Setup
+### 2.4.1 Triangle Setup
 
 Fixed-function HW is used here to perforom differential/edge equations. This can be used later in triangle traversal or mabye for interpolation of the shading data produced by the geometry processing stage.
 
-### Triangle Traversal
+### 2.4.2 Triangle Traversal
 
 This is the moment where the sampling is performed and the **fragments** are created, interpolating shading data from the original vertices. Tehre's also a *perspective-correct interpolation* (more on that later).
 
-## Pixel Processing
+## 2.5 Pixel Processing
 
-### Pixel Shading
+### 2.5.1 Pixel Shading
 
 The Pixel Shading consists of processing the interpolated shading data to output one or more colors per fragment for the next step. While the rasterization is done by dedicated hardwired silicon, the pixel shading is executed in the GPU cores and it's programmable (what we call a pixel/fragment shader program). Many techniques are performed here such as **texturing** and **illuminations computing**.
 
-### Merging
+### 2.5.2 Merging
 
 The merging step receives a color buffer as the input and must perform operations with this buffer and the current color buffer to see what's the next result for each pixel. Althought this step is not programmable, it's highly configurable and it's called ROP (Raster oprations pipeline/Render output unit).
 
@@ -95,3 +95,25 @@ A **stencil buffer** can be used to filter the rendering, creating sections of r
 
 All in all, the **Framebuffer** contains all this buffers and all the operations at the end of the pipeline are called *raster operations* or *blend operations*. When the pipeline finishes its last stage, the frame buffer is presented as the *front buffer* on screen. To prevent the viewer from seeing how the pixels are re-drawn every frame, a *back buffer* is always being written while the front when is being read. This one of many techniques is called **double buffering**.
 
+
+# 3. The Graphics Proccessing Unit
+
+## 3.1 Data-Parallel Architectures
+
+## 3.2 GPU Pipeline Overview
+
+## 3.3 The Programmable Shader Stage
+
+The basic data type are 32-bit single-precision floating points, representing scalars and vectors (in the language, the hw doesn't support vectors actually). Modern GPUs suppor 32-bit integers and 64-bit floats. Aggregated data (structures, arrays) is also supported.
+
+A draw call invokes the graphics API to execute a shader program. All programs take two kind of inputs:
+
+- Uniforms: constant along the whole draw call.
+- Varying: data that come from vertex info or from rasterization.
+- Texture: is something like a uniform but nowadays it can be thought as any large array of data.
+
+There's a VM that provide registers acording to the inputs and outputs data types. There are many constant registers for the uniforms and a fw temporary registars used for stractch space (what does this mean? Are any of these two types for varying input/output or is there a third kind of register?).
+
+The shader languages provide operators and functions optimized for the GPU and there's also flow control. It's statically when applied to uniforms and it can be optimized, but if it's dinamically due to applying to varying input, it can be costly if it causes thread divergence.
+
+## 3.4 The Evolution of Programmable Shading and APIs
