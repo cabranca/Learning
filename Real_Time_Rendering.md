@@ -144,3 +144,34 @@ There's a VM that provide registers acording to the inputs and outputs data type
 The shader languages provide operators and functions optimized for the GPU and there's also flow control. It's statically when applied to uniforms and it can be optimized, but if it's dinamically due to applying to varying input, it can be costly if it causes thread divergence.
 
 ## 3.4 The Evolution of Programmable Shading and APIs
+
+### The First steps
+
+- In 1984 Cook's *shade trees* define a tree with a concatenation of operations for a simple shader.
+- In the late 80's the RenderMan Sahding Language was developed, still used today in filming rendering and is the base for the *Open Shading Language* project.
+- The first consumer-level graphics hw *Voodoo* was released in 1996 by 3dfx Interactive. It was quickly adoptade mainly for its performance with Quake.
+- The *Quake III: Arena* scripting language was an early attempt to implement programmable shading through render passes with some success in 1999.
+- NVIDIA's GeForce 256 was the first so called GPU. It wasn't programmable but highly configurable.
+- NVIDIA's GeForce 3 was the first GPU with support for programmable vertex shaders using DirectX 8.0 or OpenGL with extensions. It had some support for pixel shading but it was limited to some oprations and only 12 instructions.
+
+### The break with DirectX 9 and it's evolution with OpenGL
+
+In 2002 DirectX 9.0 brought some major changes. Previously ther was no branching so both options had to be calculated and then interpolated. Also DirectX defined a **Shader Model** (SM) to distinguish hw with different capabilities (SM 2.0 with DirectX 9.0). Even more, they added float 16 and dependent texture reads support so finally the pixel shading had all the resources needed by the time.
+
+As the assembly code was getting more resourceful and complex, DirectX 9 also presented HLSL in collaboration with NVIDIA. Around the same time OpenGL released GLSL. Both languages have C-style syntax and are based in RenderMan Shading Language features.
+
+SM 3.0 was introduced in 2004 and brought some texture reading in vertex shaders and upgrade for many optional features that became requirements. This SM was used by XBOX 360 and PS3 but it's worth noticing that the Nintendo Wii still used a fixed pipeline while at the same time there were already tools for visual shader programming resembling Cooks's shade tree.
+
+In late 2006 DirectX 10 was launched with SM 4.0, bringing uniforms, geometry shaders, streamed output, integer data type and bitwise operations. A similar model was presented by OpenGL with GLSL 3.30.
+
+With DirectX 11 in 2009, SM 5.0 was presented with tesselation, compute shaders and support for CPU multiprocessing. OpenGL supported those features a little bit later with GLSL 4.30
+
+It's worth noticing that the main advantage in time from DirectX in comparison to OpenGL is that it's developed by Microsoft in collaboration with a few vendors (NVIDIA, AMD and Intel), while OpenGL is developed by non-profit Khronos Group with a much wider vendor collaboration. This implies that the features must work in a bigger range of architectures and that's why OpenGL provides support for extensions prior to bringing official support.
+
+### Modern APIs
+
+In 2013 AMD released the Mantle API in collaboration with DICE. They introduced a low-overhead (what does this concept mean exactly?) model that helped CPU multiprocessing wich tended to be the bottleneck. Microsoft took this model and released DirectX 12 in 2015. They didn't add hw features from their last version but refactored the whole API to the same Mantle new standard. Later on, AMD donated Mantle to Khronos Group and in 2016 they released Vulkan. While the idea was the same, Vulkan stands out as it works in many operating systems and devices (PCs, mobile) and can work without a display windows (e.g. computing).
+
+## Mobile API
+
+As the mobile hw wasn't working well with the OpenGL API, they released OpenGL ES 1.0 in 2003 with a fixed-function pipeline. Following versions added programmable shaders and even compute shaders or tesselation. As a consequence of this development, the browser-based API WebGL was released in 2011 and with JavaScript calls, OpenGL ES 2.0 was ported to the web and could be used in almost any device. Later on, WebGL 2.0 would be released based in OpenGL ES 3.0.
