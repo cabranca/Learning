@@ -174,6 +174,51 @@ It's worth noticing that the main advantage in time from DirectX in comparison t
 
 In 2013 AMD released the Mantle API in collaboration with DICE. They introduced a **low-overhead** model: traditional APIs (OpenGL, DX11) do a lot of implicit work on the CPU per draw call — state validation, resource synchronization, on-the-fly shader compilation. Low-overhead means the API shifts that responsibility to the developer: explicit memory management, pre-compiled pipeline state objects, no implicit synchronization, and multi-threaded command recording. This dramatically reduces CPU cost per draw call, which was the bottleneck Mantle was targeting. Microsoft took this model and released DirectX 12 in 2015. They didn't add hw features from their last version but refactored the whole API to the same Mantle new standard. Later on, AMD donated Mantle to Khronos Group and in 2016 they released Vulkan. While the idea was the same, Vulkan stands out as it works in many operating systems and devices (PCs, mobile) and can work without a display window (e.g. computing).
 
-## Mobile API
+### Mobile API
 
 As the mobile hw wasn't working well with the OpenGL API, they released OpenGL ES 1.0 in 2003 with a fixed-function pipeline. Following versions added programmable shaders and even compute shaders or tessellation. As a consequence of this development, the browser-based API WebGL was released in 2011 and with JavaScript calls, OpenGL ES 2.0 was ported to the web and could be used in almost any device. Later on, WebGL 2.0 would be released based in OpenGL ES 3.0.
+
+## 3.5 The Vertex Shader
+
+While this is the first programmable stage of the pipeline, actually there's a previous stage called **input assembly** where the vertex input is organized in some specific way for the shader and it also can perform *instancing*.
+
+The Vertex data may contain more than position data, mostly normals, colors, uv coordinates. The only thing mandatory for the vertex shader is to output a position for the rasterization stage (or some previous optional stage). Most of the times, the position will be in the vertex input and it will be transofrmed to the output space, the *Clip space*. 
+
+**Model -> World -> View -> Clip**
+
+## 3.6 The Tesselation Stage
+
+This is an optional stage (required by DiretX from 11 onwards? I don't understand if it's optional or not) and it allows us to render curved surfaces. Their descriptions often require less data than triangles so more memory is saved and the bus between CPU and GPU is lighter, reducing a bottleneck risk.
+
+The **Level of Detail (LOD)** can be managed here, creating a variable amount of triangles depending on the distance of the object to the camera or the GPU capabilities.
+
+The tesselation stage has 3 sub-stages:
+
+- **Hull shader/Tesselation control shader**: has an input patch and defines control points for the domain shader.
+- **Tesselator/Primitive generator**: fixed functin that generates points based on the control points, tesselation factors and a type.
+- **Domain shader/Tesselation evaluation shader**: takes the barycentric coordinates generated for each point and assigns the vertex data for each one (normal, uv coordinates, color, etc).
+
+## 3.7 The Geometry Shader
+
+This stage turns primitives into other primitives (e.g. can transform triangles in line edges to get a wireframe view). Although it can elaborate patches (find a good definition for this!), the tesselation stage is better for this task. The geometry shader is mainly ued to modify incoming data, for example to simultaneously render the six faces of a cubemap or to create cascaded shadow maps efficiently. 
+
+Some other facts:
+
+- It also can perform instancing.
+- It can output up to four *streams* (what are these?).
+- It guarantees order preservation (which goes agains GPU parallelism).
+
+## 3.7.1 Stream Output
+
+The *Stream ouput/Transform feedback* is an option pipeline tool that allow the primitive vertex data to be reused in the pipeline, whether it's sent in parallel to the rasterization stage or this one is totally disabled. This is mainly used for simulations or skin a model and reuse the vertices. It preserves primitives order and it always outputs a float array so it's expensive memory-wise.
+
+## 3.8 The Pixel Shader
+
+After the rasterizer samples the pixels to see if they overlap with the primitives, the ones that do are called **fragments** and become the input for the Pixel Shader. For these fragments, the values from the vertex shader output are interpolated and the interpolation technique is configurable (mainly perspective-correct but might be other one such as screen-space interpolation). 
+
+Some things the pixel shader can do:
+
+- Alpha testing
+- Read/write depth buffer
+- Read/write stencil buffer (at least in modern APIs)
+- **Discard fragments**: this is specially important. For exmaple it might use a user defined clip space.
