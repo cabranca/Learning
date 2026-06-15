@@ -100,7 +100,7 @@ All in all, the **Framebuffer** contains all these buffers and all the operation
 
 ## 3.1 Data-Parallel Architectures
 
-The GPU has **shader cores** that have to compute the same program, so the instructions will be the same. That's why the SIMD architecture fits perfectly. For the same instructions, we can process multiple data (e.g. fragment shading). 
+The GPU has **shader cores** that have to compute the same program, so the instructions will be the same. That's why the **SIMT** (Single Instruction, Multiple Threads) architecture fits perfectly. The distinction from classical CPU SIMD is subtle: SIMD means one core operates on a vector register simultaneously; SIMT means many threads each with their own registers execute the same instruction in lockstep across a warp. GPUs use SIMD lanes internally, but the abstraction exposed to shader programs is SIMT. For the same instruction, we can process multiple threads of data (e.g. fragment shading). 
 
 Each program execution is called **thread** and they group into **warps/wavefronts**. This is useful because even though the arithmetic operations are fast enough, when the threads have to fetch data from memory, the whole core is stalled. Instead of waiting, the GPU switches context to another warp and starts over with the following threads. By the time all the warps are stalled, ideally the first warp will be ready to continue execution after fetching the data from memory. This technique is called **latency hiding**.
 
@@ -182,13 +182,13 @@ As the mobile hw wasn't working well with the OpenGL API, they released OpenGL E
 
 While this is the first programmable stage of the pipeline, actually there's a previous stage called **input assembly** where the vertex input is organized in some specific way for the shader and it also can perform *instancing*.
 
-The Vertex data may contain more than position data, mostly normals, colors, uv coordinates. The only thing mandatory for the vertex shader is to output a position for the rasterization stage (or some previous optional stage). Most of the times, the position will be in the vertex input and it will be transofrmed to the output space, the *Clip space*. 
+The Vertex data may contain more than position data, mostly normals, colors, uv coordinates. The only thing mandatory for the vertex shader is to output a position for the rasterization stage (or some previous optional stage). Most of the times, the position will be in the vertex input and it will be transformed to the output space, the *Clip space*. 
 
 **Model -> World -> View -> Clip**
 
 ## 3.6 The Tesselation Stage
 
-This is an optional stage (required by DiretX from 11 onwards? I don't understand if it's optional or not) and it allows us to render curved surfaces. Their descriptions often require less data than triangles so more memory is saved and the bus between CPU and GPU is lighter, reducing a bottleneck risk.
+This is an optional stage at the pipeline level but a mandatory hardware capability from DX11 onwards. Any DX11-class GPU must implement the three sub-stages in hardware, but you choose whether to bind hull/domain shaders per draw call — if you don't, the stage is skipped entirely. It allows us to render curved surfaces. Their descriptions often require less data than triangles so more memory is saved and the bus between CPU and GPU is lighter, reducing a bottleneck risk.
 
 The **Level of Detail (LOD)** can be managed here, creating a variable amount of triangles depending on the distance of the object to the camera or the GPU capabilities.
 
@@ -200,17 +200,17 @@ The tesselation stage has 3 sub-stages:
 
 ## 3.7 The Geometry Shader
 
-This stage turns primitives into other primitives (e.g. can transform triangles in line edges to get a wireframe view). Although it can elaborate patches (find a good definition for this!), the tesselation stage is better for this task. The geometry shader is mainly ued to modify incoming data, for example to simultaneously render the six faces of a cubemap or to create cascaded shadow maps efficiently. 
+This stage turns primitives into other primitives (e.g. can transform triangles in line edges to get a wireframe view). Although it can elaborate **patches** (a higher-order primitive type representing a set of control points — 1–32 in DX11 — that describe a curved surface such as Bézier or B-spline), the tessellation stage is better for this task because it has dedicated fixed-function hardware for subdivision. The geometry shader is mainly used to modify incoming data, for example to simultaneously render the six faces of a cubemap or to create cascaded shadow maps efficiently. 
 
 Some other facts:
 
 - It also can perform instancing.
-- It can output up to four *streams* (what are these?).
+- It can output up to four **streams**: separate output buffers the GS writes primitive vertex data to simultaneously. Each stream is a GPU buffer (bound as a vertex buffer) that can be consumed by a subsequent draw call or read back to the CPU — the mechanism that enables multi-pass simulations staying entirely on the GPU. Only stream 0 feeds the rasterizer; streams 1–3 are stream-output only.
 - It guarantees order preservation (which goes agains GPU parallelism).
 
 ## 3.7.1 Stream Output
 
-The *Stream ouput/Transform feedback* is an option pipeline tool that allow the primitive vertex data to be reused in the pipeline, whether it's sent in parallel to the rasterization stage or this one is totally disabled. This is mainly used for simulations or skin a model and reuse the vertices. It preserves primitives order and it always outputs a float array so it's expensive memory-wise.
+The *Stream ouput/Transform feedback* is an option pipeline tool that allow the primitive vertex data to be reused in the pipeline, whether it's sent in parallel to the rasterization stage or this one is totally disabled. This is mainly used for simulations or skin a model and reuse the vertices. It preserves primitives order and early DX10 stream output was limited to float arrays, but DX11+ and Vulkan support structured buffers with arbitrary element types (integers, structs, etc.). It is still expensive memory-wise due to the order preservation requirement.
 
 ## 3.8 The Pixel Shader
 
@@ -222,3 +222,21 @@ Some things the pixel shader can do:
 - Read/write depth buffer
 - Read/write stencil buffer (at least in modern APIs)
 - **Discard fragments**: this is specially important. For exmaple it might use a user defined clip space.
+
+In modern APIs, the pixel shader can write its output to **Multiple Render Targets** instead of just writing a color an z-buffer. This has given rise to another type of pipeline, the **Deferred rendering** pipeline, where a first render pass writes the geometry and material data and then a second pass performs the lighting calculations.
+
+Another important limitation of the pixel shader is that it cannot access neighbour fragments data. However, there are exceptions for this, maybe the more relevant one being the capacity of querying the gradient data of the *quad neighbours*. As a side note, this gradient data cannot be obtained inside a code branch as it requires parallelisim and synchronization between the shader cores processing these quad neighbours.
+
+There are some special mechanisms that allow different shader cores to read/write the same buffer. One is **Unordered acces view (UAV)/Shader storage buffer object (SSBO)** and the second one is the **Rasterizer order views (ROV)**. The former is just a read/write memory chunk, accessed from any shader. This obviously leads to data races and it doesn't guarantee order of execution. The latter does guarantee this, but at the cost of a stall if an out of order execution is detected.
+
+## 3.9 The Merging Stage
+
+The **output merger/per-sample operations** stage gathers the pixel shader output and performs depth testing, stencil testing and blending. Sometimes the GPU can perform *early-z test* to avoid computing the pixel shader for a fragment that won't be visible in the end. However, this is disabled by default if the pixel shader modifies the z value of discards the frament (though it can be enforced). The merging stage is hightly configurable, mainly for the color blending. It's able to perform many algorithms for this operation.
+
+## 3.10 The Compute Shader
+
+In parallel to the graphics pipeline there is another use for the GPU, i.e. **computing**. The compute shader can access the same buffers as the other shaders (mainly for textures) and it's more explicitly related to the GPU harwdware in that the memory is shared between a **thread group** that is guaranteed to run concurrently.
+
+Another advantage of using compute shaders is that it can take as input data that's already located on the GPU so it's much faster that sending it to the CPU for the calculations. This is why the compute shader is used for post-processing of the graphics pipeline data as well as particle systems, mesh processing, culling, etc.
+
+# 4. Transforms
