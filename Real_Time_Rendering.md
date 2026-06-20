@@ -239,4 +239,85 @@ In parallel to the graphics pipeline there is another use for the GPU, i.e. **co
 
 Another advantage of using compute shaders is that it can take as input data that's already located on the GPU so it's much faster that sending it to the CPU for the calculations. This is why the compute shader is used for post-processing of the graphics pipeline data as well as particle systems, mesh processing, culling, etc.
 
-# 4. Transforms
+# 5. Shading Basics
+
+## 5.2 Light Sources
+
+The light source gives some sort of a dominant direction for shading (the angle between view and light or some variation of this). There are shading models that try to follow physic laws and some others that seek a specific artistic style.
+
+At a high level, we'll always want two terms, one for the unlit contribution and one for the lit contributions, i.e. the sum of two sub-functions. The Unlit one would represent the color of the fragment in de dark and the lit one should be related to the color of the light source as well.
+
+```color_shaded = f_unlit(n,v) + color_light * f_lit(l, n, v)``` (or a summatory for multiple light sources)
+
+We also see a proportionality between the contribution of the light and the dot product between light and normal vectors when positive. We have to clamp the value to zero from below because negative values indicate that the light comes from inside the object, something we don't wanna consider. Even though many models consider this proportion, there are some of them that do not, so they don't perform this dot product. Examples: **wrap shading** (used to approximate subsurface scattering in skin/cloth) replaces the clamped n·l with (n·l + w)/(1+w), effectively wrapping light around the terminator; **anisotropic BRDFs** (for brushed metal or hair) substitute or supplement the normal with a tangent vector, producing a fundamentally different geometric term.
+
+Maybe the simplest choice for the lit function is just taking a constant color. This is the **Lambertian** shading model — and yes, this is exactly the diffuse term of Phong. The Lambertian BRDF is a constant (k_d, the surface color), meaning the surface reflects light equally in all directions. The n·l factor comes from the geometry of light incidence, not from the BRDF itself.
+
+```c_shaded = f_unlit(n,v) + clamp(dot(l,n), 0, 1) * c_light * c_surface ```
+
+### 5.2.1 Directional Light
+
+This is the simplest model, it's an abstraction of a light source that is so far away that the light rays become parallel (like the sun at human scale). It has a constant direction and color. However, for creativity reasons, the color might not be constant across the whole space.
+
+### 5.2.2 Punctual Lights
+
+This type of lights have a position, an origin for the source. In this case, the light vector is dependent of the fragment position relative to the light source.
+
+One example is the **Point/Omni light** that irradiates light in every direction and it decrases at a square distance ratio. Dividing by the squared distance has two big problems. Firstly, at the origin there is a singularity so one must use some alternatives that approximate this calculation, mainly adding an epsilon to the distance term or clamping it to a minimum distance. The latter has a physical explanation: it considers the light source actual radius, so any smaller distance value would represent a point inside the source which doesn't make sense. Secondly, at hight distances the numbers become more and more costly but the color value is practically zero. To avoid this, an option could be to multiply a **windowing function** by the main function in order to set the color to zero smoothly or to change the color function to a linear decrase after some distance threshold. It depends on the application requirements. All in all, there might be another **distance falloff functions** in engines that have other requirements such as performance or style choices.
+
+Another punctual light example is the **Spotlight**. In addition to the distance falloff function there is a function that decreases the light intensity depending on the light vector. The most common spotlight model has a **penumbra** angle that defines a cone where the light is at the maximum intensity (max value of the directional falloff function) and a **umbra** angle that defines the limit of the light cone. Any fragment outside of the cone is not lighted.
+
+### 5.2.3 Other Light Types
+
+Although the directional and punctual lights are the mainstream, there's been an increase in **area lights**, a model closer to the real world where lights have a size to consider. They aren't that expensive and the advance in GPU computing will continue to make them more likeable to use.
+
+# 6. Texturing
+
+## 6.1 The Texturing Pipeline
+
+### 6.1.1 The Projector Function
+
+Basically we have multiple ways to transform a coordinate in **Object Space** (e.g. a vertex in a mesh) to a coordinate in **Parameter Space**. We have different types of projections (planar, spheric, 2D to 4D, based on position, temperature or whatever we want). Maybe the most common one is to bake the *(u,v)* coordinates of a 2D texture to the vertices of a mesh when authoring a model.
+
+### 6.1.2 The Corresponder Function
+
+This function takes the (*u*, *v*) coordinates in parameter space and transform them to **Texture Space**. The texture space has the size of the actual texture with some width and height for their **texels**. As there is a mapping between this range and the parameter space range [0, 1], the user must define what happens outside of this range. The common approaches are:
+
+- Wrap/Repeat/Tile: the textures repeats itself outside of its boundaries.
+- Mirror: the texture repeats itself but mirrors the out of bound axis.
+- Clamp/Clamp to Edge: the texture uses the bound value as a constant.
+- Border/Clamp to Border: The texture uses a pre-defined border value.
+
+### 6.1.3 Texture Values
+
+This last main transformation is basically a lookup table from the texture space coordinates to an arbitrary value that we want to store in the image. Most commonly a RGB color but it could be anything: grayscale value, roughness, RGBA, 3D vector surface normal, etc.
+
+However, there's also procedural texturing. It's not a lookup table but a different computation with the texture coordinates but this will be covered later on.
+
+## 6.2 Image Texturing
+
+The main issue to solve here is what happens when the surface to cover with a texture is much bigger (*magnification*) or much smaller (*minification*) than the texture size. This is a sampling and filtering problem and can be solved at a texture level (the input) or at a pixel level (the output).
+
+If the input and output have a linear dependency (such as colors), then it doesn't matter where to do the filtering. However, for non-linear dependency cases (roughness, normals) filtering the input might cause *aliasing* so other techniques must be used.
+
+### 6.2.1 Magnification
+
+The idea is to use the values of the closest texels to the pixel in order to calculate the pixel texture value. Some common approaches are:
+
+- **Nearest Neighbour**: just repeats the value of the closest texel. This results in a *pixelation* behavior.
+- **Bilinear/Linear Interpolation**: the pixel takes the closest four neighbour texels within the two axes and interpolates in both dimensions. There is no pixeling but it's blurry.
+- **Bicubic Interpolation**: more expensive but even less pixeling. Can be done in addition to some smoothing curves such as the *smoothstep* curve or the *quintic* curve.
+
+### 6.2.2 Minification
+
+When many texels contribute to a single pixel, it's very expensive (almost impossible) to know the exact contribution in real time. That's why we have some techniques to come up with a value.
+
+- **Nearest Neighbour**: such as in magnification, we could take the value of the texel that's exactly in the center of the pixel. This causes a very ugly aliasing.
+- **Bilinear Interpolation**: just as in magnification, we can apply the same concept but will produce aliasing in most cases if there are more than 4 texels per pixel.
+- **Mipmapping**: the idea is to reduce the size of texels until one of the dimensions has a ratio of 1:1 with the pixels. We start with the original texture as *Level 0* and from there we divide the texture size by 4 (each dimension by 2) to get the next mip level or *subtexture*. The new level texel averages its neighbour texels from the former level. The mipmap levels form a **mipmap chain**. The user can choose what filtering function to use (box, Gaussian, etc) with different results. If the texture is sRGB, it must be converted to linear space in order to calculate mipmaps. There is also an interpolation between levels given the parameter **level of detail** and it's called **trilinear interpolation**. One downside of mipmapping comes when looking at a texture nearly edge-on and one dimension stretches while the other doesn't. This causes *overblurring* due to the asymmetry.
+- **Summed-Area Table**: precomputes a table where each entry SAT[x,y] stores the sum of all texel values in the rectangle from (0,0) to (x,y). Any axis-aligned rectangular footprint can then be evaluated in constant time using four lookups and inclusion-exclusion: `sum = SAT[x2,y2] - SAT[x1-1,y2] - SAT[x2,y1-1] + SAT[x1-1,y1-1]`. The main drawbacks are that it requires higher-precision storage (values accumulate, so 8-bit per channel overflows), the footprint must be axis-aligned, and it has poor cache coherency. Anisotropic filtering is now generally preferred.
+- **Unconstrained Anisotropic Filtering**: In this case the back-projection of the pixel's cell is used for two things. The shorter dimension sets the mipmap level and the longer dimension sets the anisotropy axis. The ration between the dimensions will dictate the amount of samples taken from the mipmaps.
+
+## 6.5 Material Mapping
+
+Instead of having constant values for properties like color, roughness or height, these material values can be bound to a texture map, creating a relationship between the object coordinate and the material properties values. Even more, the shader programs can use these values to choose a branch and make conditional computing for some specific materials. We must remember that the antialiasing and filtering is non-trivial for materials where the relationship between input and output is non-linear.
