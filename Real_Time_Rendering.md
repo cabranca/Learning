@@ -321,3 +321,47 @@ When many texels contribute to a single pixel, it's very expensive (almost impos
 ## 6.5 Material Mapping
 
 Instead of having constant values for properties like color, roughness or height, these material values can be bound to a texture map, creating a relationship between the object coordinate and the material properties values. Even more, the shader programs can use these values to choose a branch and make conditional computing for some specific materials. We must remember that the antialiasing and filtering is non-trivial for materials where the relationship between input and output is non-linear.
+
+# 9. Physically Based Shading
+
+## 9.1 Physics of Light
+
+Thinking the light as a wave, physics describes it as the propagation of two fields that are orthogonal to each other and to the direction of propagation. These fields are the electric and the magnetic. The energy asocciated to the wave is proportional to the amplitud of each field, but as they're both related, we'll take the magnetic contribution in function of the electric field as well. Then, we know that the energy of the wave is proportional to the squared amplitud of the electric field. We take the electric field and not the magnetic as the former has much more incidence in the interaction between light and object illumination.
+
+Although it might seem that the quadratic dependency of the energy is creating energy when we sum two waves in phase, in reality the energy is still conserved as in other place the interference is destructive.
+
+*I didn't get this. If we have two light waves in the void that are in phase, then where is that "other place" that compensate the idea of the total energy being more than the sum of the parts?*
+
+In the real world, the waves are almost perfectly random, so the interference is neither constructive nor destructive but linear dependent on the amount of waves.
+
+A light wave contains many wave lengths all in one, but each one of them interacts in its own way when hitting some particle, scattering at some level depending on particle or material properties, mainly in the original axis of propagation.
+
+### 9.1.2 Media
+
+The media in which the light travels has an **index of refraction (IOR)** that plays a significant role when the light changes media. One property of the media is the **absorption**, the capacity to absorb light, attenuating it at an exponential rate (Beer-Lambert law). Both IOR and absorption vary with the wavelength.
+
+Both scattering and absorption are scale-dependent (for example the water if we observe a glass or the sea).
+
+### 9.1.3 Surface
+
+A surface is a two dimensional interface separating two volumes with different IOR. When studying the incidence of the light in a surface, there are two main factors: **the substances in the volumes and the surface geometry**. 
+
+Assuming a flat plane as the surface geometry, let's analyze the influence of the volume material. As a consequence of the electric field being continuous across the surface, the scattered wave preserves the incident direction. Then, the wave divides in two, the **transmitted/refracted wave** and the **reflected wave**. Also the frequency is conserved and the phase velocity changes proportionally to the volumes IOR ratio. As a result of all this, the reflected wave has the same angle with the normal as the incident one but the refracted wave has an angle that follows **Snell's Law**
+
+**Why does the E-field boundary condition imply this?** The condition must hold at *every point on the surface* and at *every moment in time* simultaneously. This means the component of the wavevector parallel to the surface (`k_∥`) must be identical for the incident, reflected, and transmitted waves — otherwise there would be points/times where the condition fails. This is called **phase matching**.
+
+- **Law of reflection**: the reflected wave is in the same medium so `|k|` is unchanged. Matching `k_∥` with the same magnitude forces `θ_reflected = θ_incident`.
+- **Snell's Law**: the transmitted wave is in a different medium so `|k| = nω/c` differs. Matching `k_∥` across the two magnitudes gives `n₁ sin(θ_i) = n₂ sin(θ_t)`.
+
+So the boundary condition doesn't preserve the incident direction — it enforces phase matching along the surface, and the reflection/refraction angles are the geometric consequence of that.
+
+Regarding the surface geometry, we know that there is no perfectly planar surface. They all have irregularities and the size of these is what dictates the effect on light. Always comparing to the light wave length, if they are too big the surface has no local irregularities, it just tilts. If they are too small, they have no effect. Finally, if it's in range of 1-100 wavelengths, there is **diffraction** that we'll ignore.
+
+When the irregularities are too small and we have to render them, we handle the scattering statistically and call this property **roughness**.
+
+### 9.1.4 Subsurface Scattering
+
+We can model the subsurface scattering locally or globally and this depends on the material properties and the **scale of observation**. When the entry-exit distances are small relative to the shading scale, they can be treated as zero and we can use a local shading model. This is handled by the **specular term** (reflection) and the **diffuse term** (subsurface scattering).
+When entry-exit distances are large relative to the shading scale, some specialized global subsurface scattering technique is required.
+
+## 9.3 BRDF
