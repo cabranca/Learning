@@ -419,3 +419,27 @@ with $\mathbf{c}_{diff}$ the diffuse color or albedo.
 - Since $f$ is constant, pull it out of $R(\mathbf{l})$: $R(\mathbf{l}) = f \int_\Omega (\mathbf{n} \cdot \mathbf{v})\, d\mathbf{v} = f \cdot \pi$, because integrating $\cos\theta$ over the hemisphere gives $\pi$.
 - We want $R(\mathbf{l}) = \mathbf{c}_{diff}$ (the surface reflects its albedo, no more). Setting $f \cdot \pi = \mathbf{c}_{diff}$ gives $f = \mathbf{c}_{diff}/\pi$.
 - The book's "1/π factor is caused by integrating cosine over the hemisphere yielding π" means exactly this: $\pi$ appears as a multiplier after the integral, so we put $1/\pi$ in $f$ to cancel it and conserve energy. Your interpretation is correct.
+
+## 9.4 Illumination
+
+The $L_i(\mathbf{l})$, the **incoming radiance** can be calculated with local or global illumination techniques. We'll cover only the local for now. In this case the incoming radiance term will be given and not computed. Instead of working with area lights, we'll consider only directional and point lights.
+
+As these lights are aproximations from real world lighting, we'll make some definitions to understand the error involved. Firstly, we define $l_c$ as the vector pointing to the light center. Secondly, we define $c_{light}$ as the reflected radiance from a white surface at $\mathbf{n}$ = $\mathbf{l}$.
+
+Then, if we take the directional light as the limit of the area light shrinking to zero keeping it's color, then the reflectance equation is as follows:
+
+$$L_o(\mathbf{v}) = \pi f(\mathbf{l_c}, \mathbf{v})\, c_{light} (\mathbf{n} \cdot \mathbf{l_c})\, d\mathbf{l}$$
+
+## 9.5 Fresnel Reflectance
+
+The equation developed by Fresnel assumes a flat surface with irregularities either smaller than 1 light wavelength (doesn't affect it) or bigger than 10 wavelengths (tilt the surface without affecting local flatness).
+
+As we've already seen, the incident light splits into a reflected part and a refracted part. The refracted part is proportional to the ration between the medias refaction indexes. The reflected part follow this equation:
+
+$$r_i = 2 (\mathbf{n} \cdot \mathbf{l}) \mathbf{n} - \mathbf{l}$$
+
+### 9.5.1 External Reflection
+
+The *external reflection* is the case where $n_1 \leq n_2$ (we assume $n_1 = 1$ for the air). For a given substance, we can interpret the Fresnel equations as defining a reflectance function $F(\theta_i)$ dependent only on the incident angle. When the light ray and the normal are aligned, we have a value only dependent on the media, $F_0$, that we'll consider an RGB value. This case is called **normal incidence**. When we increase the angle, the value of $F(\theta_i)$ tends to increase as well until it reaches white for $\theta_i = 90\degree$. Most substances have almost a constant value of reflectance until $\theta_i = 75\degree$.
+
+
