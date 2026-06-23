@@ -365,3 +365,57 @@ We can model the subsurface scattering locally or globally and this depends on t
 When entry-exit distances are large relative to the shading scale, some specialized global subsurface scattering technique is required.
 
 ## 9.3 BRDF
+
+All in all, PBR's goal is to calculate the radiance of light at a given point and a given direction of propagation. Thus we have
+
+$$L_i(c, -\mathbf{v})$$
+
+with $L$ the **radiance**, $c$ the **camera position** and $-\mathbf{v}$ the **direction along the view ray**. We use $-\mathbf{v}$ because the direction argument in $L(x, \mathbf{d})$ describes where the light is *coming from* at $x$. Since $\mathbf{v}$ points from the surface toward the camera, $-\mathbf{v}$ points from the camera back toward the scene — the direction from which light arrives at $c$.
+
+A *participating medium* affects radiance by absorption or scattering. Assuming for now that it's not present, the radiance emitted from the surface point is the same that arrives at the camera. Thus,
+
+$$L_i(c, -\mathbf{v}) = L_o(p, \mathbf{v})$$
+
+with $p$ the intersection of the view ray with the closest object surface.
+
+It's our job now to calculate $L_o$. We could have emissive surfaces but most of the time the source of the radiance will be a reflection of a light source radiance. We'll leave transparency and global subsurface scattering aside, focusing only on **local reflectance** (i.e. reflection and local subsurface scattering). This local reflectance only depends on the light direction $\mathbf{l}$ and the outgoing view direction $\mathbf{v}$, and it's quantified by the **bidirectional reflectance distribution function** (BRDF). Worth mentioning that we'll actually cover *spatially varying* BRDFs (non-uniform surface).
+
+Moreover, the two direction vectors span four degrees of freedom — two **elevation angles** with the normal and two **azimuth** angles with the tangent. For **isotropic** BRDFs, only the *relative* azimuth matters: the surface is rotationally symmetric around $\mathbf{n}$, meaning rotating both $\mathbf{l}$ and $\mathbf{v}$ by the same angle around $\mathbf{n}$ doesn't change the result. This reduces the DoF to 3.
+
+One last assumption: we're not working with fluorescence nor phosphorescence, so the wavelength at incidence and outgoing is the same. As different wavelengths have different reflectances, we treat them as a *spectrally distributed value* — the way to go in real-time rendering.
+
+Thus, we incorporate the BRDF to compute $L_o(p, \mathbf{v})$, omitting $p$ for simplicity:
+
+$$L_o(\mathbf{v}) = \int_{\mathbf{l} \in \Omega} f(\mathbf{l}, \mathbf{v})\, L_i(\mathbf{l})\, (\mathbf{n} \cdot \mathbf{l})\, d\mathbf{l}$$
+
+Worth noticing that when $\mathbf{l}$ is under the hemisphere we should not compute the equation, and when $\mathbf{v}$ or $\mathbf{n}$ are, the dot product must be clamped (with an epsilon or *soft clamped* to avoid artifacts).
+
+Every BRDF has two constraints. The first, and more important in offline rendering, is **Helmholtz reciprocity**: $f(\mathbf{l}, \mathbf{v}) = f(\mathbf{v}, \mathbf{l})$. The second is **conservation of energy**: outgoing energy can **never** exceed incoming energy (omitting emissive materials). In RTR we'll always want to approximate this.
+
+We can use the **directional-hemispherical reflectance** $R(\mathbf{l})$ to measure energy loss for a given incoming direction $\mathbf{l}$:
+
+$$R(\mathbf{l}) = \int_{\mathbf{v} \in \Omega} f(\mathbf{l}, \mathbf{v})\, (\mathbf{n} \cdot \mathbf{v})\, d\mathbf{v}$$
+
+Note the cosine factor is $\mathbf{n} \cdot \mathbf{v}$ (the *outgoing* angle) since we integrate over all outgoing directions $\mathbf{v}$.
+
+Due to Helmholtz reciprocity this equals the **hemispherical-directional reflectance** $R(\mathbf{v})$, and *directional albedo* is used as a blanket term for both:
+
+$$R(\mathbf{v}) = \int_{\mathbf{l} \in \Omega} f(\mathbf{l}, \mathbf{v})\, (\mathbf{n} \cdot \mathbf{l})\, d\mathbf{l}$$
+
+**Why are R(l) and R(v) the same and why "directional albedo"?** By reciprocity ($f(\mathbf{l},\mathbf{v}) = f(\mathbf{v},\mathbf{l})$), swapping the integration variable in $R(\mathbf{l})$ gives exactly $R(\mathbf{v})$ — they're the same mathematical function of a direction. So the reflectance doesn't depend on which end (in or out) you compute it from; it's just a per-direction quantity. "Directional albedo" is the unified name for this. Both output values in $[0, 1]$: $0$ is total absorption, $1$ is total reflection.
+
+The **Lambertian** is the simplest BRDF — $f$ is constant, meaning the surface scatters light equally in all directions. Substituting a constant $f$ into $R(\mathbf{l})$:
+
+$$R(\mathbf{l}) = \pi \cdot f(\mathbf{l}, \mathbf{v})$$
+
+and thus:
+
+$$f(\mathbf{l}, \mathbf{v}) = \frac{\mathbf{c}_{diff}}{\pi}$$
+
+with $\mathbf{c}_{diff}$ the diffuse color or albedo.
+
+**Breaking down the Lambertian derivation:**
+- $f(\mathbf{l}, \mathbf{v})$ is the BRDF — a ratio of scattered radiance to incoming irradiance. $L_i(\mathbf{l})$ is separate: the incoming radiance at the surface from direction $\mathbf{l}$ (i.e. the light sources). They combine in the rendering equation.
+- Since $f$ is constant, pull it out of $R(\mathbf{l})$: $R(\mathbf{l}) = f \int_\Omega (\mathbf{n} \cdot \mathbf{v})\, d\mathbf{v} = f \cdot \pi$, because integrating $\cos\theta$ over the hemisphere gives $\pi$.
+- We want $R(\mathbf{l}) = \mathbf{c}_{diff}$ (the surface reflects its albedo, no more). Setting $f \cdot \pi = \mathbf{c}_{diff}$ gives $f = \mathbf{c}_{diff}/\pi$.
+- The book's "1/π factor is caused by integrating cosine over the hemisphere yielding π" means exactly this: $\pi$ appears as a multiplier after the integral, so we put $1/\pi$ in $f$ to cancel it and conserve energy. Your interpretation is correct.
