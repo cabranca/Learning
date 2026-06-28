@@ -442,4 +442,60 @@ $$r_i = 2 (\mathbf{n} \cdot \mathbf{l}) \mathbf{n} - \mathbf{l}$$
 
 The *external reflection* is the case where $n_1 \leq n_2$ (we assume $n_1 = 1$ for the air). For a given substance, we can interpret the Fresnel equations as defining a reflectance function $F(\theta_i)$ dependent only on the incident angle. When the light ray and the normal are aligned, we have a value only dependent on the media, $F_0$, that we'll consider an RGB value. This case is called **normal incidence**. When we increase the angle, the value of $F(\theta_i)$ tends to increase as well until it reaches white for $\theta_i = 90\degree$. Most substances have almost a constant value of reflectance until $\theta_i = 75\degree$.
 
+# 18. Pipeline Optimization
 
+In every rendering application there is a **botleneck**, some stage of the pipeline that sets the duration of the whole process. The idea is to measure the program, find the bottleneck and optimize it. There are always many bottlenecks depending on the frame of the scope, but we should stay with the most common bottleneck for our application.
+
+We should not over optimize, just do it until the bottleneck moves elsewhere in the pipeline. Moreover, if some bottleneck is truly hard to optimize, we can then take that spare time in the other stages to do more things or use more complex algorithms.
+
+Only two rules for optimizing:
+
+- **KNOW YOUR ARCHITECTURE**
+- **MEASURE, MEASURE, MEASURE**
+
+## 18.2 Locating the Bottleneck
+
+### 18.2.1 Testing the Application Stage
+
+- Test with a null graphics driver.
+- Underclock the CPU.
+- Overclodk the CPU.
+
+### 18.2.2 Testing the Geometry Processing Stage
+
+- Increase the size of the vertex format (Vertex Fetching).
+- Make the vertex shader program longer (making sure the compiler does not optimize away the additional instructions).
+- If there is geometry shader, change output size and program length.
+- If there is tessellation shader, change program length and tessellation factor.
+
+### 18.2.3 Testing the Rasterization Stage
+
+- Increase the execution time of both vertex and pixel shaders by increasing program sizes. If render time per frame does not increase, then the bottleneck is the rasterization stage.
+
+### 18.2.4 Testing the Pixel Processing Stage
+
+- Change the screen resolution. Lowering it could make the geometry shader (if present) do less work due to a lower LOD.
+- Change the program instruction amount.
+- Change Texture resolution to 1x1 to see if cache misses are the bottleneck.
+
+### 18.2.5 Testing the Merging Stage
+
+Every change on the configuration could cause a bottleneck. I think it's a matter of tweaking and measuring.
+
+## 18.4 Optimization
+
+### 18.4.2 API Calls
+
+For CPUs with discrete GPUs, each one has its own memory. One improvement is to make explicit if a buffer is static or dynamic depending on the write frequency. Even if CPU and GPU have unified memory, it matters in which pool we're allocating a given buffer, for example marking it as CPU-only, GPU-only or shared (the last one involves a lot of cache invalidation). Also it's always good to mark a buffer static if it's gonna be processed only on GPU as the CPU-GPU bus has much less bandwidth than the GPU internal bus.
+
+#### State Changes (to be completed)
+
+#### Consolidating and Instancing
+
+As there is a fixed-cost overhead associated with each draw call, independent of the primitive size, it's much more efficient to render a few triangle-filled meshes than many small ones.
+
+One way to reduce the number of draw calls is **consolidating** many objects into one single mesh. They must share the same state of course, using common shaders and texture-sharing techniques. Not only there are less draw calls, but the App has to handle fewer objects. The two drawbacks of this approach are making objects to large for other algorithms (such as frustum culling) and losing the identity of each object inside the single mesh.
+
+Another way to reduce draw calls is **instancing**, a process in which we perform a single draw call and instance the shader by providing a separate data structure with the specific per-instance info. This can be combined with LOD for better results. As a side note, even though geometry shaders can be used for instancing, they're not the best tool.
+
+There's also a combination of both techniques, **merge-instancing** where a consolidated mesh contains objects that may in turn be instanced (please elaborate).
