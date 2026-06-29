@@ -532,3 +532,38 @@ For a given **bounding volume (BV)** hierarchy, a **preorder traversal** from th
 A further optimization is to use **plane masking** when a BV intersects the frustum. Instead of testing every frustum plane with the children, we write down which planes intersected with the parent so we only test those.
 
 As a side note, view frustum culling exploits spatial coherence as near objects can be enclosed in the same BV. Also many game engines don't use BVHs but a plain linear list of BVs to take advantage of SIMD and multiple threads.
+
+# 22. Intersection Test Methods
+
+## 22.3 Bounding Volume Creation
+
+Finding a tight fitting bounding volume is very important for intersection test methods. Basically, the tighter the BV fits the enclosed geometry, the fewer *false positives* — cases where the BV is hit but the real geometry isn't — so the more often we can cheaply discard. The relevant measure depends on the query: for ray casting, the probability a random ray hits a convex BV is proportional to its **surface area** (the *Surface Area Heuristic*, SAH); for object-vs-object overlap it scales more with **volume**. Either way, smaller/tighter is better.
+
+### 22.3.1 AABB and k-DOP Creation
+
+For AABB, take the minimum and maximum vertex values for each axis and construct the AABB.
+
+The k-DOP generalizes this. A k-DOP is defined by a **fixed, predefined set of k/2 direction vectors** (the same set reused for every object — *not* the mesh's own polygon face normals). Project all vertices onto each of those k/2 directions and record the min and max along each one; the resulting pairs of slabs bound the geometry. An AABB is just the special case k = 6, where the directions are the three coordinate axes.
+
+### 22.3.2 Sphere Creation
+
+There are many techniques to create the sphere, with trade-offs regarding minimality and cost.
+
+- Apply AABB and then use its center and half its diagonal as the sphere's center and radius. Crude — usually loose.
+- Keep the AABB center but set the radius to the distance to the actual farthest vertex. Tighter than using the diagonal, still cheap.
+- **Ritter's algorithm.** Fast, two-pass. It does **not** produce the optimal sphere — it's a good *approximation* (typically a few percent larger than minimal). Pass 1 picks an initial sphere from an extreme-points pair; pass 2 grows it to include any vertex that falls outside.
+- **Welzl's algorithm.** More costly but produces the **exact minimum bounding sphere**, in expected linear time O(n). This is the one that actually guarantees optimality.
+
+## 22.14 View Frustum Intersection
+
+### 22.14.2 Frustum/Sphere Intersection
+
+For an orthographic view, the frustum is a box so the overlap test becomes sphere/OBB. To further test if the sphere is fully inside the box, we must check that the center is inside along each of the three axes by a distance greater than the radius.
+
+For a general frustum, we can construct an inner frustum and an outer frustum, subtracting and adding the radius respectively in the direction of the frustum planes' normals. Then we check the position of the sphere center relative to these two frusta, which collapses the sphere test into a cheap point test. The three outcomes:
+
+- center outside the **outer** frustum → sphere fully outside → **reject**;
+- center inside the **inner** frustum → sphere fully inside → **accept**;
+- otherwise → **intersecting** (partially inside).
+
+The main caveat is that exactly offsetting a frustum by the radius produces *rounded* corners and edges (it's the Minkowski sum of the frustum with the sphere), and computing those rounded corners is costly. So in practice the planes are just pushed straight out, which over-extends the volume by more than the radius near the corners, giving occasional false positives there. In any case, the test is **conservative** (it never wrongly rejects a visible sphere, only sometimes keeps an invisible one) so it's not bad at all.
