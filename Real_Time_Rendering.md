@@ -444,7 +444,7 @@ The *external reflection* is the case where $n_1 \leq n_2$ (we assume $n_1 = 1$ 
 
 # 18. Pipeline Optimization
 
-In every rendering application there is a **botleneck**, some stage of the pipeline that sets the duration of the whole process. The idea is to measure the program, find the bottleneck and optimize it. There are always many bottlenecks depending on the frame of the scope, but we should stay with the most common bottleneck for our application.
+In every rendering application there is a **bottleneck**, some stage of the pipeline that sets the duration of the whole process. The idea is to measure the program, find the bottleneck and optimize it. There are always many bottlenecks depending on the frame of the scope, but we should stay with the most common bottleneck for our application.
 
 We should not over optimize, just do it until the bottleneck moves elsewhere in the pipeline. Moreover, if some bottleneck is truly hard to optimize, we can then take that spare time in the other stages to do more things or use more complex algorithms.
 
@@ -457,9 +457,9 @@ Only two rules for optimizing:
 
 ### 18.2.1 Testing the Application Stage
 
-- Test with a null graphics driver.
-- Underclock the CPU.
-- Overclodk the CPU.
+- Test with a null graphics driver (one that accepts API calls but issues no GPU work). If performance is unchanged, the CPU/application stage is the bottleneck.
+- Underclock the CPU. If frame rate drops proportionally, you're CPU-bound.
+- Overclock the CPU. The complementary test: if frame rate rises, you're CPU-bound.
 
 ### 18.2.2 Testing the Geometry Processing Stage
 
@@ -470,13 +470,13 @@ Only two rules for optimizing:
 
 ### 18.2.3 Testing the Rasterization Stage
 
-- Increase the execution time of both vertex and pixel shaders by increasing program sizes. If render time per frame does not increase, then the bottleneck is the rasterization stage.
+- Increase the execution time of both vertex and pixel shaders by increasing program sizes. If render time per frame does *not* increase, then neither geometry processing nor pixel shading is the limiter — by elimination the bottleneck sits in the fixed-function work around them (triangle setup/traversal, i.e. rasterization, or merging). This test points at rasterization by exclusion rather than measuring it directly.
 
 ### 18.2.4 Testing the Pixel Processing Stage
 
-- Change the screen resolution. Lowering it could make the geometry shader (if present) do less work due to a lower LOD.
-- Change the program instruction amount.
-- Change Texture resolution to 1x1 to see if cache misses are the bottleneck.
+- Change the screen resolution (or render-target size). If frame time scales with the pixel count, the bottleneck is fragment-bound (pixel shading / rasterization / merging). **Caveat to control for**: if your LOD selection is driven by screen-space coverage/error, lowering the resolution also lowers the chosen LOD and reduces geometry-stage work — that confounds the measurement, so it's not a pixel-stage effect you *want*, it's one you must hold constant before trusting the result.
+- Change the pixel shader program instruction count. If frame time tracks the change, pixel shading is (part of) the bottleneck.
+- Change texture resolution to 1×1. If frame time improves, texture-cache misses / bandwidth are the bottleneck.
 
 ### 18.2.5 Testing the Merging Stage
 
@@ -488,14 +488,47 @@ Every change on the configuration could cause a bottleneck. I think it's a matte
 
 For CPUs with discrete GPUs, each one has its own memory. One improvement is to make explicit if a buffer is static or dynamic depending on the write frequency. Even if CPU and GPU have unified memory, it matters in which pool we're allocating a given buffer, for example marking it as CPU-only, GPU-only or shared (the last one involves a lot of cache invalidation). Also it's always good to mark a buffer static if it's gonna be processed only on GPU as the CPU-GPU bus has much less bandwidth than the GPU internal bus.
 
-#### State Changes (to be completed)
+#### State Changes
+
+Besides the per-draw-call overhead, changing **render state** between draw calls is itself expensive. Setting a new shader program is the costliest, followed roughly (most→least) by: ROP/blend & depth-stencil state → texture bindings → vertex format → uniform/constant updates. The exact ordering is hardware- and driver-dependent, so this is a rule of thumb, not a law.
+
+The main strategies to reduce this cost:
+
+- **Sort draws by state.** Batch everything that shares a shader together, then sub-sort by texture, etc., so each state is set as few times as possible.
+- **Filter redundant changes.** The engine (or driver) keeps a shadow copy of the current state and skips a change that would set a value already in effect (*state shadowing*).
+- **Reduce the number of distinct states.** Merge many specialized shaders into a single *übershader* that branches on uniforms — but this trades state changes for shader complexity / possible divergence, so it's a balance.
+- **Avoid texture rebinds.** Use texture **atlases**, **texture arrays**, or **bindless textures** so many objects can be drawn without swapping the bound texture.
 
 #### Consolidating and Instancing
 
 As there is a fixed-cost overhead associated with each draw call, independent of the primitive size, it's much more efficient to render a few triangle-filled meshes than many small ones.
 
-One way to reduce the number of draw calls is **consolidating** many objects into one single mesh. They must share the same state of course, using common shaders and texture-sharing techniques. Not only there are less draw calls, but the App has to handle fewer objects. The two drawbacks of this approach are making objects to large for other algorithms (such as frustum culling) and losing the identity of each object inside the single mesh.
+One way to reduce the number of draw calls is **consolidating** many objects into one single mesh. They must share the same state of course, using common shaders and texture-sharing techniques. Not only there are less draw calls, but the App has to handle fewer objects. The two drawbacks of this approach are making objects too large for other algorithms (such as frustum culling) and losing the identity of each object inside the single mesh.
 
 Another way to reduce draw calls is **instancing**, a process in which we perform a single draw call and instance the shader by providing a separate data structure with the specific per-instance info. This can be combined with LOD for better results. As a side note, even though geometry shaders can be used for instancing, they're not the best tool.
 
-There's also a combination of both techniques, **merge-instancing** where a consolidated mesh contains objects that may in turn be instanced (please elaborate).
+There's also a combination of both techniques, **merge-instancing**. The idea: build one consolidated buffer that holds several *distinct* objects (the merging part), and within that same buffer let some of those objects be drawn with hardware *instancing* (the repeated copies). A single draw call then renders both the unique geometry and the repeated geometry at once. The shader uses per-vertex and per-instance index data to look up the correct transform/material from buffers, so each piece is placed and shaded correctly even though they all came in through one call.
+
+Concrete example: a building made of several unique structural parts plus dozens of identical windows. The unique parts are consolidated into the merged mesh; the windows are instanced; everything is submitted in one draw call. You get the draw-call savings of consolidation *and* the memory savings of instancing for the repeated parts.
+
+
+# 19. Acceleration Algorithms
+
+## 19.2 Culling Techniques
+
+**Cull** in a rendering context means removing portions of the scene that do not contribute to the final image. There are many techniques such as *backface*, *view frustum* and *occlusion* culling (the latter the most expensive by far). The culling might take place in any stage of the Graphics pipeline but the sooner we discard primitives, the faster the rendering.
+
+> **Doubt: doesn't GPU-driven rendering break the "sooner is always better" rule?**
+> Your instinct is right, with a nuance. The book's claim is really about *the earlier in the pipeline a primitive is discarded, the less downstream work it generates* — and that's still true. What changes with GPU-driven rendering is *where* "early" lives. Classic culling happens on the CPU (application stage) so culled objects never even produce a draw call. GPU-driven rendering instead culls in a **compute shader** that runs before/around the geometry stage, building the draw list on the GPU itself (indirect draws). That is "later" than the CPU in the logical sequence, but it's still *early relative to rasterization/pixel work*, which is what matters for downstream cost. And it wins on two axes the CPU can't: it removes the per-object CPU overhead (you submit a handful of indirect draws instead of thousands of calls) and it culls massively in parallel. So "cull as early as possible" should be read as "discard before the expensive stages," not "discard on the CPU." GPU-driven culling honors the spirit of the rule while moving the work off the CPU.
+
+What we need to send to the pipeline is ideally called the **exact visible set (EVS)**, i.e. all the primitives that are partially or fully visible. Computing exact visibility is prohibitively expensive — the *aspect graph* that encodes exact visibility from every viewpoint under perspective projection can have O(n⁹) complexity for a general scene — so it's more common to try to find a **potentially visible set (PVS)** instead. If the PVS includes the entire EVS (it may also include some non-visible primitives), it is said to be **conservative**. If it can miss some genuinely visible primitives, it's **approximate**.
+
+## 19.4 View Frustum Culling
+
+We know that only primitives that intersect with the view frustum are going to be rendered, so we could do that computation ourselves in advance. This can be applied hierarchically with a spatial data structure.
+
+For a given **bounding volume (BV)** hierarchy, a **preorder traversal** from the root solves this problem. Each node with a BV is tested against the frustum. If it's outside the frustum, it's discarded automatically. If it's fully inside the frustum, it's automatically passed to the pipeline. If it's partially inside, the traversal continues testing the children of that BV. If a leaf intersects the frustum, it's sent to the pipeline as well (although not all of its primitives are inside the frustum).
+
+A further optimization is to use **plane masking** when a BV intersects the frustum. Instead of testing every frustum plane with the children, we write down which planes intersected with the parent so we only test those.
+
+As a side note, view frustum culling exploits spatial coherence as near objects can be enclosed in the same BV. Also many game engines don't use BVHs but a plain linear list of BVs to take advantage of SIMD and multiple threads.
